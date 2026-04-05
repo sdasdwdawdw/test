@@ -12,6 +12,8 @@ local HttpService = game:GetService("HttpService")
 
 local DeltaLib = {}
 local isMobile = UserInputService.TouchEnabled
+local GetCamera = function() return Workspace.CurrentCamera or Workspace:FindFirstChildWhichIsA("Camera") end
+local HookingState = false
 
 -- [[ AUTOMATIC CLEANUP SYSTEM ]]
 local Connections = {}
@@ -3838,7 +3840,9 @@ function DeltaLib:CreateWindow(title)
 
     local function isVisible(targetPart)
         if not targetPart or not targetPart.Parent then return false end
-        local origin = Camera.CFrame.Position
+        local cam = GetCamera()
+        if not cam then return true end
+        local origin = cam.CFrame.Position
         local dir = (targetPart.Position - origin).Unit * (targetPart.Position - origin).Magnitude
         local ray = RaycastParams.new()
         ray.FilterType = Enum.RaycastFilterType.Exclude
@@ -3927,7 +3931,9 @@ function DeltaLib:CreateWindow(title)
     local function getClosestTarget(settings)
         local closestDist = settings.FOVSize
         local closestTarget = nil
-        local center = Camera.ViewportSize / 2
+        local cam = GetCamera()
+        if not cam then return nil end
+        local center = cam.ViewportSize / 2
         
         local potentialTargets = {}
         
@@ -3976,7 +3982,7 @@ function DeltaLib:CreateWindow(title)
                     for _, partName in ipairs(checkParts) do
                         local part = char:FindFirstChild(partName)
                         if part then
-                            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                            local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
                             if onScreen then
                                 local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
                                 if dist <= settings.FOVSize then
@@ -4053,7 +4059,8 @@ function DeltaLib:CreateWindow(title)
 
     RunService.Heartbeat:Connect(function()
         pcall(function()
-            if not SilentAimSettings.Enabled then 
+            Camera = GetCamera()
+            if not Camera or not SilentAimSettings.Enabled then 
                 if SilentTracerLine then SilentTracerLine.Visible = false end
                 AnimateHUD(false)
                 return 
@@ -4193,6 +4200,8 @@ function DeltaLib:CreateWindow(title)
     end)
 
     RunService.RenderStepped:Connect(function()
+        Camera = GetCamera()
+        if not Camera then return end
         local mouseLoc = UserInputService:GetMouseLocation()
         local center = Camera.ViewportSize / 2
         
@@ -4247,7 +4256,8 @@ function DeltaLib:CreateWindow(title)
                 local args = {...}
                 local method = getnamecallmethod()
                 
-                if SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
+                if not HookingState and SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
+                    HookingState = true
                     local sTarget = getClosestTarget(SilentAimSettings)
                     if sTarget and sTarget.Character then
                         local sPart = resolveTargetPart(sTarget.Character, SilentAimSettings)
@@ -4255,10 +4265,13 @@ function DeltaLib:CreateWindow(title)
                             if method == "Raycast" then
                                 local origin = args[1]
                                 local direction = (sPart.Position - origin).Unit * SilentAimSettings.MaxDistance
-                                return oldNamecall(self, origin, direction, args[3])
+                                local r = oldNamecall(self, origin, direction, args[3])
+                                HookingState = false
+                                return r
                             end
                         end
                     end
+                    HookingState = false
                 end
                 return oldNamecall(self, ...)
             end)
@@ -4282,7 +4295,7 @@ function DeltaLib:CreateWindow(title)
     -- Run hook safely
     pcall(hook)
     -- [[ INSTANT EQUIP HOOK ]]
-    game.Workspace.Camera.ChildAdded:Connect(function(child)
+    Workspace.CurrentCamera.ChildAdded:Connect(function(child)
         if not GunModsSettings.InstantEquip then return end
         if not (child:IsA("Model") and child.Name == "ViewModel") then return end
         

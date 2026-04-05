@@ -752,20 +752,11 @@ TargetStatusLabel = Create("TextLabel", {
     })
 
     local MainGrid = Create("Frame", { Parent = InvFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 40), Size = UDim2.new(1, -24, 0, invLayout.MainGridHeight) })
-    local fullGridClass = isMobile and "Frame" or "ScrollingFrame"
-    local fullGridProps = { 
-        Parent = InvFrame, 
-        BackgroundTransparency = 1, 
-        Position = UDim2.new(0, 12, 0, invLayout.FullPos), 
-        Size = isMobile and UDim2.new(1, -24, 0, 240) or UDim2.new(1, -24, 0, 360),
+    FullGrid = Create(isMobile and "Frame" or "ScrollingFrame", { 
+        Parent = InvFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, invLayout.FullPos), Size = isMobile and UDim2.new(1, -24, 0, 240) or UDim2.new(1, -24, 0, 360),
+        ScrollBarThickness = isMobile and 0 or 2, ScrollBarImageColor3 = Color3.fromRGB(60, 62, 75), CanvasSize = UDim2.new(0, 0, 0, 0),
         BorderSizePixel = 0
-    }
-    if not isMobile then
-        fullGridProps.ScrollBarThickness = 2
-        fullGridProps.ScrollBarImageColor3 = Color3.fromRGB(60, 62, 75)
-        fullGridProps.CanvasSize = UDim2.new(0, 0, 0, 0)
-    end
-    FullGrid = Create(fullGridClass, fullGridProps)
+    })
     fullGridL = Create("UIGridLayout", { Parent = FullGrid, CellSize = UDim2.new(0, invLayout.FullCellSize, 0, invLayout.FullCellSize), CellPadding = UDim2.new(0, invLayout.FullPadding, 0, invLayout.FullPadding) })
     if not isMobile then
         fullGridL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -1594,7 +1585,7 @@ function DeltaLib:CreateWindow(title)
         local btn = Create("TextButton", {
             Parent = Controls,
             BackgroundTransparency = 1,
-            Size = UDim2.new(0, 28, 1, 0), -- Full height for better hit area
+            Size = UDim2.new(0, 28, 1, 0),
             Font = Enum.Font.GothamMedium,
             Text = text,
             TextColor3 = Theme.SecondaryText,
@@ -1613,7 +1604,6 @@ function DeltaLib:CreateWindow(title)
         createControlButton("X", 14, 2, function() DeltaLib:Unload() end)
     end
 
-    -- Floating Mobile Toggle (from mar.txt)
     local MobileToggle = Create("TextButton", {
         Name = "DeltaMobileToggle",
         Parent = ScreenGui,
@@ -1645,7 +1635,7 @@ function DeltaLib:CreateWindow(title)
 
     ToggleUI = function()
         UIHidden = not UIHidden
-        MainContainer.Visible = not UIHidden
+        if MainContainer then MainContainer.Visible = not UIHidden end
         if isMobile and MobileToggle then MobileToggle.Visible = UIHidden end
     end
 
@@ -1653,7 +1643,6 @@ function DeltaLib:CreateWindow(title)
         MobileToggle.Activated:Connect(function() ToggleUI() end)
         MakeDraggable(MobileToggle)
 
-        -- Manual Inventory Check Trigger Button (from mar.txt)
         local InvCheckManualBtn = Create("TextButton", {
             Name = "DeltaInvManualBtn",
             Parent = ScreenGui,
@@ -3930,10 +3919,9 @@ function DeltaLib:CreateWindow(title)
     -- [ Removed local TracerLine to use global AimbotTracerLine/SilentTracerLine ]
 
     local function getClosestTarget(settings)
-        local closestDist = settings.FOVSize or 150
+        local closestDist = settings.FOVSize
         local closestTarget = nil
-        local vSize = Camera and Camera.ViewportSize or Vector2.new(800, 600)
-        local center = Vector2.new(vSize.X / 2, vSize.Y / 2)
+        local center = Camera.ViewportSize / 2
         
         local potentialTargets = {}
         
@@ -3963,49 +3951,46 @@ function DeltaLib:CreateWindow(title)
         local lpPos = lpRoot.Position
         local droppedItems = Workspace:FindFirstChild("DroppedItems")
 
-        -- Aggressive Part Check List
-        local checkParts = {"Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+        -- Parts to check for aggressive FOV detection
+        local checkParts = {"Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"}
 
         for _, target in ipairs(potentialTargets) do
             local char = target.Character
             if char and char.Parent ~= droppedItems then
-                local hum = char:FindFirstChild("Humanoid")
-                local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
-                
-                if hum and hum.Health > 0 and hrp then
-                    -- World Distance Check (Ensure NO mobile-specific limit)
-                    local worldDist = (lpPos - hrp.Position).Magnitude
-                    local maxDist = settings.MaxDistance or 2000
-                    if worldDist > maxDist then continue end
+                local primaryPart = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
+                if char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 and primaryPart then
+                    -- World Distance Check
+                    local worldDist = (lpPos - primaryPart.Position).Magnitude
+                    if settings.MaxDistance and worldDist > settings.MaxDistance then continue end
 
-                    -- Aggressive Detection: Check if ANY part is in FOV
-                    local anyPartInFOV = false
+                    -- AGGRESSIVE FOV CHECK: Check if ANY part is in the circle
+                    local inFOV = false
                     local bestPartDist = math.huge
-                    local selectedPart = nil
-
-                    for _, pName in ipairs(checkParts) do
-                        local part = char:FindFirstChild(pName)
-                        if part and part:IsA("BasePart") then
+                    
+                    for _, partName in ipairs(checkParts) do
+                        local part = char:FindFirstChild(partName)
+                        if part then
                             local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
                             if onScreen then
                                 local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                                if dist <= closestDist then
-                                    anyPartInFOV = true
-                                    if dist < bestPartDist then
-                                        bestPartDist = dist
-                                        selectedPart = part
-                                    end
+                                if dist <= settings.FOVSize then
+                                    inFOV = true
+                                    if dist < bestPartDist then bestPartDist = dist end
                                 end
                             end
                         end
                     end
 
-                    if anyPartInFOV and selectedPart then
-                        if settings.WallCheck and not isVisible(selectedPart) then continue end
-                        closestDist = bestPartDist
-                        closestTarget = target
-                        -- Store the targeted part for the hook to use
-                        target.SelectedPart = selectedPart
+                    if inFOV then
+                        -- If multiple targets are in FOV, we pick the one whose closest part is closest to the center
+                        if bestPartDist <= closestDist then
+                            -- Wall Check on the resolved target part (actual aim point)
+                            local aimPart = resolveTargetPart(char, settings)
+                            if settings.WallCheck and not isVisible(aimPart) then continue end
+                            
+                            closestDist = bestPartDist
+                            closestTarget = target
+                        end
                     end
                 end
             end
@@ -4203,29 +4188,18 @@ function DeltaLib:CreateWindow(title)
 
     RunService.RenderStepped:Connect(function()
         local mouseLoc = UserInputService:GetMouseLocation()
-        local vSize = Camera and Camera.ViewportSize or Vector2.new(800, 600)
-        local center = Vector2.new(vSize.X / 2, vSize.Y / 2)
+        local center = Camera.ViewportSize / 2
         
-        -- FOV Visuals (Mobile Fix: Force property synchronization)
-        if AimbotSettings.ShowFOV then
-            FOVCircle.Position = center
-            FOVCircle.Radius = AimbotSettings.FOVSize
-            FOVCircle.Color = AimbotSettings.TracerColor or Color3.fromRGB(255, 255, 255)
-            FOVCircle.Transparency = 0.8
-            FOVCircle.Visible = true
-        else
-            FOVCircle.Visible = false
-        end
+        -- FOV Visuals
+        FOVCircle.Position = center
+        FOVCircle.Radius = AimbotSettings.FOVSize
+        FOVCircle.Visible = AimbotSettings.ShowFOV
+        FOVCircle.Color = AimbotSettings.TracerColor
         
-        if SilentAimSettings.ShowFOV then
-            SilentFOVCircle.Position = center
-            SilentFOVCircle.Radius = SilentAimSettings.FOVSize
-            SilentFOVCircle.Color = SilentAimSettings.TracerColor or Color3.fromRGB(255, 255, 255)
-            SilentFOVCircle.Transparency = 0.8
-            SilentFOVCircle.Visible = true
-        else
-            SilentFOVCircle.Visible = false
-        end
+        SilentFOVCircle.Position = center
+        SilentFOVCircle.Radius = SilentAimSettings.FOVSize
+        SilentFOVCircle.Visible = SilentAimSettings.ShowFOV
+        SilentFOVCircle.Color = SilentAimSettings.TracerColor
 
         AimbotTracerLine.Visible = false
 
@@ -4259,7 +4233,7 @@ function DeltaLib:CreateWindow(title)
     end)
 
     -- [[ SILENT AIM REDIRECTION HOOK ]]
-    local hooking = false
+    -- [[ SILENT AIM REDIRECTION HOOK ]]
     local function hook()
         if hookmetamethod then
             local oldNamecall
@@ -4267,49 +4241,32 @@ function DeltaLib:CreateWindow(title)
                 local args = {...}
                 local method = getnamecallmethod()
                 
-                if not hooking and SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist") then
-                    hooking = true
+                if SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
                     local sTarget = getClosestTarget(SilentAimSettings)
                     if sTarget and sTarget.Character then
-                        local sPart = sTarget.SelectedPart or resolveTargetPart(sTarget.Character, SilentAimSettings)
-                        if sPart and args and args[1] then
-                            local distLimit = SilentAimSettings.MaxDistance or 2000
+                        local sPart = resolveTargetPart(sTarget.Character, SilentAimSettings)
+                        if sPart then
                             if method == "Raycast" then
                                 local origin = args[1]
-                                local direction = (sPart.Position - origin).Unit * distLimit
-                                if direction.X == direction.X then 
-                                    hooking = false
-                                    return oldNamecall(self, origin, direction, args[3])
-                                end
-                            elseif (method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "FindPartOnRay") and typeof(args[1]) == "Ray" then
-                                local rayOrigin = args[1].Origin
-                                local direction = (sPart.Position - rayOrigin).Unit * distLimit
-                                if direction.X == direction.X then
-                                    hooking = false
-                                    args[1] = Ray.new(rayOrigin, direction)
-                                    return oldNamecall(self, unpack(args))
-                                end
+                                local direction = (sPart.Position - origin).Unit * SilentAimSettings.MaxDistance
+                                return oldNamecall(self, origin, direction, args[3])
                             end
                         end
                     end
-                    hooking = false
                 end
                 return oldNamecall(self, ...)
             end)
         elseif hookfunction and Workspace.Raycast then
             local oldRaycast
             oldRaycast = hookfunction(Workspace.Raycast, function(self, origin, direction, params)
-                if not hooking and SilentAimSettings.Enabled then
-                    hooking = true
+                if SilentAimSettings.Enabled then
                     local sTarget = getClosestTarget(SilentAimSettings)
                     if sTarget and sTarget.Character then
-                        local sPart = sTarget.SelectedPart or resolveTargetPart(sTarget.Character, SilentAimSettings)
+                        local sPart = resolveTargetPart(sTarget.Character, SilentAimSettings)
                         if sPart then
-                            local dir = (sPart.Position - origin).Unit * (SilentAimSettings.MaxDistance or 2000)
-                            if dir.X == dir.X then direction = dir end
+                            direction = (sPart.Position - origin).Unit * SilentAimSettings.MaxDistance
                         end
                     end
-                    hooking = false
                 end
                 return oldRaycast(self, origin, direction, params)
             end)

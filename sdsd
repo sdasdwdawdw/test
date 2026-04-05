@@ -650,15 +650,15 @@ local InvFrame, invLayout, MainIcons, AttachIcons, FullIcons, FullLabels, fullGr
 
 -- Device-Specific UI Configuration
 invLayout = isMobile and {
-    FrameSize = UDim2.new(0, 480, 0, 420),
+    FrameSize = UDim2.new(0, 340, 0, 460),
     FramePos = UDim2.new(0.5, 0, 0.5, 0),
     FrameAnchor = Vector2.new(0.5, 0.5),
-    MainIconSize = 42,
+    MainIconSize = 38,
     MainSpacing = 78,
-    MainGridHeight = 110,
-    FullPos = 165,
-    FullCellSize = 34,
-    FullPadding = 5
+    MainGridHeight = 160,
+    FullPos = 210,
+    FullCellSize = 32,
+    FullPadding = 4
 } or {
     FrameSize = UDim2.new(0, 480, 0, 580),
     FramePos = UDim2.new(0, 20, 0.1, 0),
@@ -803,12 +803,13 @@ TargetStatusLabel = Create("TextLabel", {
     MainIcons = {}; AttachIcons = {}; FullIcons = {}; FullLabels = {}
     local EMPTY_ICON = "rbxassetid://12459616555"
 
+    local rowCount = isMobile and 4 or 6
     for i=1, 12 do
-        local row = math.floor((i-1)/6)
-        local col = (i-1)%6
+        local row = math.floor((i-1)/rowCount)
+        local col = (i-1)%rowCount
         local icon = Create("ImageLabel", {
             Parent = MainGrid, BackgroundColor3 = Color3.fromRGB(30, 31, 38), Size = UDim2.new(0, invLayout.MainIconSize, 0, invLayout.MainIconSize),
-            Position = UDim2.new(0, col * invLayout.MainSpacing, 0, row * (invLayout.MainIconSize + (isMobile and 12 or 22))), Image = EMPTY_ICON, BorderSizePixel = 0
+            Position = UDim2.new(0, col * invLayout.MainSpacing, 0, row * (invLayout.MainIconSize + (isMobile and 18 or 22))), Image = EMPTY_ICON, BorderSizePixel = 0
         })
         Create("UICorner", { Parent = icon, CornerRadius = UDim.new(0, 6) })
         MainIcons[i] = icon
@@ -819,7 +820,7 @@ TargetStatusLabel = Create("TextLabel", {
                 local attWidth = isMobile and 9 or 12
                 local att = Create("Frame", {
                     Parent = MainGrid, BackgroundColor3 = Color3.fromRGB(20, 21, 26), Size = UDim2.new(0, attWidth, 0, attHeight),
-                    Position = UDim2.new(0, (col * invLayout.MainSpacing) + (j-1)*(isMobile and 10.5 or 13.5), 0, invLayout.MainIconSize + 3), Visible = false
+                    Position = UDim2.new(0, (col * invLayout.MainSpacing) + (j-1)*(isMobile and 9.5 or 13.5), 0, invLayout.MainIconSize + 3), Visible = false
                 })
                 Create("UICorner", { Parent = att, CornerRadius = UDim.new(0, 3) })
                 local attIcon = Create("ImageLabel", { Parent = att, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Image = EMPTY_ICON })
@@ -1446,7 +1447,7 @@ AddConnection(RunService.RenderStepped:Connect(function()
                 FullGrid.Visible = showFull
                 
                 if isMobile then
-                    InvFrame.Size = showFull and UDim2.new(0, 480, 0, 420) or UDim2.new(0, 480, 0, 160)
+                    InvFrame.Size = showFull and UDim2.new(0, 340, 0, 460) or UDim2.new(0, 340, 0, 210)
                 else
                     InvFrame.Size = showFull and UDim2.new(0, 480, 0, 580) or UDim2.new(0, 480, 0, 210)
                 end

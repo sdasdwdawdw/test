@@ -11,7 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
 local DeltaLib = {}
-local isMobile = false
+local isMobile = UserInputService.TouchEnabled
 
 -- [[ AUTOMATIC CLEANUP SYSTEM ]]
 local Connections = {}
@@ -3921,9 +3921,10 @@ function DeltaLib:CreateWindow(title)
     -- [ Removed local TracerLine to use global AimbotTracerLine/SilentTracerLine ]
 
     local function getClosestTarget(settings)
-        local closestDist = settings.FOVSize
+        local closestDist = settings.FOVSize or 150
         local closestTarget = nil
-        local center = Camera.ViewportSize / 2
+        local vSize = Camera and Camera.ViewportSize or Vector2.new(800, 600)
+        local center = Vector2.new(vSize.X / 2, vSize.Y / 2)
         
         local potentialTargets = {}
         
@@ -4193,13 +4194,15 @@ function DeltaLib:CreateWindow(title)
 
     RunService.RenderStepped:Connect(function()
         local mouseLoc = UserInputService:GetMouseLocation()
-        local center = Camera.ViewportSize / 2
+        local vSize = Camera and Camera.ViewportSize or Vector2.new(800, 600)
+        local center = Vector2.new(vSize.X / 2, vSize.Y / 2)
         
-        -- FOV Visuals
+        -- FOV Visuals (Mobile Fix: Force property synchronization)
         if AimbotSettings.ShowFOV then
             FOVCircle.Position = center
             FOVCircle.Radius = AimbotSettings.FOVSize
-            FOVCircle.Color = AimbotSettings.TracerColor
+            FOVCircle.Color = AimbotSettings.TracerColor or Color3.fromRGB(255, 255, 255)
+            FOVCircle.Transparency = 0.8
             FOVCircle.Visible = true
         else
             FOVCircle.Visible = false
@@ -4208,7 +4211,8 @@ function DeltaLib:CreateWindow(title)
         if SilentAimSettings.ShowFOV then
             SilentFOVCircle.Position = center
             SilentFOVCircle.Radius = SilentAimSettings.FOVSize
-            SilentFOVCircle.Color = SilentAimSettings.TracerColor
+            SilentFOVCircle.Color = SilentAimSettings.TracerColor or Color3.fromRGB(255, 255, 255)
+            SilentFOVCircle.Transparency = 0.8
             SilentFOVCircle.Visible = true
         else
             SilentFOVCircle.Visible = false
@@ -4246,7 +4250,7 @@ function DeltaLib:CreateWindow(title)
     end)
 
     -- [[ SILENT AIM REDIRECTION HOOK ]]
-    -- [[ SILENT AIM REDIRECTION HOOK ]]
+    local hooking = false
     local function hook()
         if hookmetamethod then
             local oldNamecall
@@ -4254,37 +4258,49 @@ function DeltaLib:CreateWindow(title)
                 local args = {...}
                 local method = getnamecallmethod()
                 
-                if SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
+                if not hooking and SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist") then
+                    hooking = true
                     local sTarget = getClosestTarget(SilentAimSettings)
                     if sTarget and sTarget.Character then
                         local sPart = sTarget.SelectedPart or resolveTargetPart(sTarget.Character, SilentAimSettings)
-                        if sPart then
+                        if sPart and args and args[1] then
+                            local distLimit = SilentAimSettings.MaxDistance or 2000
                             if method == "Raycast" then
                                 local origin = args[1]
-                                local direction = (sPart.Position - origin).Unit * SilentAimSettings.MaxDistance
-                                return oldNamecall(self, origin, direction, args[3])
-                            elseif method == "FindPartOnRayWithIgnoreList" then
+                                local direction = (sPart.Position - origin).Unit * distLimit
+                                if direction.X == direction.X then 
+                                    hooking = false
+                                    return oldNamecall(self, origin, direction, args[3])
+                                end
+                            elseif (method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "FindPartOnRay") and typeof(args[1]) == "Ray" then
                                 local rayOrigin = args[1].Origin
-                                local direction = (sPart.Position - rayOrigin).Unit * SilentAimSettings.MaxDistance
-                                args[1] = Ray.new(rayOrigin, direction)
-                                return oldNamecall(self, unpack(args))
+                                local direction = (sPart.Position - rayOrigin).Unit * distLimit
+                                if direction.X == direction.X then
+                                    hooking = false
+                                    args[1] = Ray.new(rayOrigin, direction)
+                                    return oldNamecall(self, unpack(args))
+                                end
                             end
                         end
                     end
+                    hooking = false
                 end
                 return oldNamecall(self, ...)
             end)
         elseif hookfunction and Workspace.Raycast then
             local oldRaycast
             oldRaycast = hookfunction(Workspace.Raycast, function(self, origin, direction, params)
-                if SilentAimSettings.Enabled then
+                if not hooking and SilentAimSettings.Enabled then
+                    hooking = true
                     local sTarget = getClosestTarget(SilentAimSettings)
                     if sTarget and sTarget.Character then
                         local sPart = sTarget.SelectedPart or resolveTargetPart(sTarget.Character, SilentAimSettings)
                         if sPart then
-                            direction = (sPart.Position - origin).Unit * SilentAimSettings.MaxDistance
+                            local dir = (sPart.Position - origin).Unit * (SilentAimSettings.MaxDistance or 2000)
+                            if dir.X == dir.X then direction = dir end
                         end
                     end
+                    hooking = false
                 end
                 return oldRaycast(self, origin, direction, params)
             end)

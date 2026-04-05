@@ -752,11 +752,20 @@ TargetStatusLabel = Create("TextLabel", {
     })
 
     local MainGrid = Create("Frame", { Parent = InvFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 40), Size = UDim2.new(1, -24, 0, invLayout.MainGridHeight) })
-    FullGrid = Create(isMobile and "Frame" or "ScrollingFrame", { 
-        Parent = InvFrame, BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, invLayout.FullPos), Size = isMobile and UDim2.new(1, -24, 0, 240) or UDim2.new(1, -24, 0, 360),
-        ScrollBarThickness = isMobile and 0 or 2, ScrollBarImageColor3 = Color3.fromRGB(60, 62, 75), CanvasSize = UDim2.new(0, 0, 0, 0),
+    local fullGridClass = isMobile and "Frame" or "ScrollingFrame"
+    local fullGridProps = { 
+        Parent = InvFrame, 
+        BackgroundTransparency = 1, 
+        Position = UDim2.new(0, 12, 0, invLayout.FullPos), 
+        Size = isMobile and UDim2.new(1, -24, 0, 240) or UDim2.new(1, -24, 0, 360),
         BorderSizePixel = 0
-    })
+    }
+    if not isMobile then
+        fullGridProps.ScrollBarThickness = 2
+        fullGridProps.ScrollBarImageColor3 = Color3.fromRGB(60, 62, 75)
+        fullGridProps.CanvasSize = UDim2.new(0, 0, 0, 0)
+    end
+    FullGrid = Create(fullGridClass, fullGridProps)
     fullGridL = Create("UIGridLayout", { Parent = FullGrid, CellSize = UDim2.new(0, invLayout.FullCellSize, 0, invLayout.FullCellSize), CellPadding = UDim2.new(0, invLayout.FullPadding, 0, invLayout.FullPadding) })
     if not isMobile then
         fullGridL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()

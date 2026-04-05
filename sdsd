@@ -11,7 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
 local DeltaLib = {}
-local isMobile = UserInputService.TouchEnabled
+local isMobile = false
 
 -- [[ AUTOMATIC CLEANUP SYSTEM ]]
 local Connections = {}
@@ -3921,10 +3921,9 @@ function DeltaLib:CreateWindow(title)
     -- [ Removed local TracerLine to use global AimbotTracerLine/SilentTracerLine ]
 
     local function getClosestTarget(settings)
-        local closestDist = settings.FOVSize or 150
+        local closestDist = settings.FOVSize
         local closestTarget = nil
-        local vSize = Camera and Camera.ViewportSize or Vector2.new(800, 600)
-        local center = Vector2.new(vSize.X / 2, vSize.Y / 2)
+        local center = Camera.ViewportSize / 2
         
         local potentialTargets = {}
         
@@ -4194,15 +4193,13 @@ function DeltaLib:CreateWindow(title)
 
     RunService.RenderStepped:Connect(function()
         local mouseLoc = UserInputService:GetMouseLocation()
-        local vSize = Camera and Camera.ViewportSize or Vector2.new(800, 600)
-        local center = Vector2.new(vSize.X / 2, vSize.Y / 2)
+        local center = Camera.ViewportSize / 2
         
-        -- FOV Visuals (Mobile Fix: Force property synchronization)
+        -- FOV Visuals
         if AimbotSettings.ShowFOV then
             FOVCircle.Position = center
             FOVCircle.Radius = AimbotSettings.FOVSize
-            FOVCircle.Color = AimbotSettings.TracerColor or Color3.fromRGB(255, 255, 255)
-            FOVCircle.Transparency = 0.8
+            FOVCircle.Color = AimbotSettings.TracerColor
             FOVCircle.Visible = true
         else
             FOVCircle.Visible = false
@@ -4211,8 +4208,7 @@ function DeltaLib:CreateWindow(title)
         if SilentAimSettings.ShowFOV then
             SilentFOVCircle.Position = center
             SilentFOVCircle.Radius = SilentAimSettings.FOVSize
-            SilentFOVCircle.Color = SilentAimSettings.TracerColor or Color3.fromRGB(255, 255, 255)
-            SilentFOVCircle.Transparency = 0.8
+            SilentFOVCircle.Color = SilentAimSettings.TracerColor
             SilentFOVCircle.Visible = true
         else
             SilentFOVCircle.Visible = false
@@ -4258,25 +4254,20 @@ function DeltaLib:CreateWindow(title)
                 local args = {...}
                 local method = getnamecallmethod()
                 
-                if SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist") then
+                if SilentAimSettings.Enabled and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
                     local sTarget = getClosestTarget(SilentAimSettings)
                     if sTarget and sTarget.Character then
                         local sPart = sTarget.SelectedPart or resolveTargetPart(sTarget.Character, SilentAimSettings)
-                        if sPart and args and args[1] then
-                            local distLimit = SilentAimSettings.MaxDistance or 2000
+                        if sPart then
                             if method == "Raycast" then
                                 local origin = args[1]
-                                local direction = (sPart.Position - origin).Unit * distLimit
-                                if direction.X == direction.X then -- NaN Check
-                                    return oldNamecall(self, origin, direction, args[3])
-                                end
-                            elseif (method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "FindPartOnRay") and typeof(args[1]) == "Ray" then
+                                local direction = (sPart.Position - origin).Unit * SilentAimSettings.MaxDistance
+                                return oldNamecall(self, origin, direction, args[3])
+                            elseif method == "FindPartOnRayWithIgnoreList" then
                                 local rayOrigin = args[1].Origin
-                                local direction = (sPart.Position - rayOrigin).Unit * distLimit
-                                if direction.X == direction.X then -- NaN Check
-                                    args[1] = Ray.new(rayOrigin, direction)
-                                    return oldNamecall(self, unpack(args))
-                                end
+                                local direction = (sPart.Position - rayOrigin).Unit * SilentAimSettings.MaxDistance
+                                args[1] = Ray.new(rayOrigin, direction)
+                                return oldNamecall(self, unpack(args))
                             end
                         end
                     end
@@ -4291,8 +4282,7 @@ function DeltaLib:CreateWindow(title)
                     if sTarget and sTarget.Character then
                         local sPart = sTarget.SelectedPart or resolveTargetPart(sTarget.Character, SilentAimSettings)
                         if sPart then
-                            local dir = (sPart.Position - origin).Unit * (SilentAimSettings.MaxDistance or 2000)
-                            if dir.X == dir.X then direction = dir end
+                            direction = (sPart.Position - origin).Unit * SilentAimSettings.MaxDistance
                         end
                     end
                 end

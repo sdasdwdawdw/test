@@ -645,15 +645,16 @@ local function MakeDraggable(frame, parent)
 end
 
 -- [[ INVENTORY CHECKER SYSTEM (from implace.txt) ]]
--- [[ INVENTORY CHECKER SYSTEM (from implace.txt) ]]
 local InvGui = Create("ScreenGui", { Name = "InvChecker", Parent = game:GetService("CoreGui") })
 local InvFrame, invLayout, MainIcons, AttachIcons, FullIcons, FullLabels, fullGridL, FullGrid
+
+-- Device-Specific UI Configuration
 invLayout = isMobile and {
-    FrameSize = UDim2.new(0, 520, 0, 410),
+    FrameSize = UDim2.new(0, 480, 0, 420),
     FramePos = UDim2.new(0.5, 0, 0.5, 0),
     FrameAnchor = Vector2.new(0.5, 0.5),
     MainIconSize = 42,
-    MainSpacing = 82,
+    MainSpacing = 78,
     MainGridHeight = 110,
     FullPos = 165,
     FullCellSize = 34,
@@ -681,6 +682,33 @@ InvFrame = Create("Frame", {
 })
 Create("UICorner", { Parent = InvFrame, CornerRadius = UDim.new(0, 8) })
 Create("UIStroke", { Parent = InvFrame, Color = Color3.fromRGB(40, 42, 50), Thickness = 1.5 })
+
+-- Floating Mobile Trigger Button
+local InvCheckManualBtn = Create("TextButton", {
+    Name = "DeltaInvManualBtn",
+    Parent = InvGui, -- Moved to InvGui for better management
+    BackgroundColor3 = Theme.Background,
+    Position = UDim2.new(0.5, -30, 0.5, 50),
+    Size = UDim2.new(0, 60, 0, 28),
+    Visible = false,
+    Text = "CHECK",
+    Font = Theme.FontSemiBold,
+    TextColor3 = Theme.Accent,
+    TextSize = 10,
+    BorderSizePixel = 0,
+    ZIndex = 2000
+})
+UIHandles.InvCheckManualBtn = InvCheckManualBtn
+Create("UICorner", { Parent = InvCheckManualBtn, CornerRadius = UDim.new(0, 6) })
+local ManualStroke = Create("UIStroke", { Parent = InvCheckManualBtn, Color = Theme.Accent, Thickness = 1.2 })
+
+InvCheckManualBtn.MouseButton1Click:Connect(function()
+    if InvCheckSettings and InvCheckSettings.Enabled then
+        InvCheckSettings.Active = not InvCheckSettings.Active
+        TweenService:Create(ManualStroke, TweenInfo.new(0.3), {Color = InvCheckSettings.Active and Color3.fromRGB(50, 255, 50) or Theme.Accent}):Play()
+    end
+end)
+if isMobile then MakeDraggable(InvCheckManualBtn) end
 
 -- [[ TARGET HUD GUI ]]
 TargetHudGui = Create("ScreenGui", { Name = "TargetHud", Parent = game:GetService("CoreGui") })
@@ -764,7 +792,7 @@ TargetStatusLabel = Create("TextLabel", {
         fullGridProps.ScrollBarImageColor3 = Color3.fromRGB(60, 62, 75)
         fullGridProps.CanvasSize = UDim2.new(0, 0, 0, 0)
     end
-    FullGrid = Create(isMobile and "Frame" or "ScrollingFrame", fullGridProps)
+    FullGrid = isMobile and Create("Frame", fullGridProps) or Create("ScrollingFrame", fullGridProps)
     fullGridL = Create("UIGridLayout", { Parent = FullGrid, CellSize = UDim2.new(0, invLayout.FullCellSize, 0, invLayout.FullCellSize), CellPadding = UDim2.new(0, invLayout.FullPadding, 0, invLayout.FullPadding) })
     if not isMobile then
         fullGridL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -787,9 +815,11 @@ TargetStatusLabel = Create("TextLabel", {
 
         if i <= 3 then
             for j=1, 4 do
+                local attHeight = isMobile and 8 or 10
+                local attWidth = isMobile and 9 or 12
                 local att = Create("Frame", {
-                    Parent = MainGrid, BackgroundColor3 = Color3.fromRGB(20, 21, 26), Size = UDim2.new(0, isMobile and 9 or 12, 0, isMobile and 8 or 10),
-                    Position = UDim2.new(0, (col * invLayout.MainSpacing) + (j-1)*(isMobile and 10 or 13.5), 0, invLayout.MainIconSize + 3), Visible = false
+                    Parent = MainGrid, BackgroundColor3 = Color3.fromRGB(20, 21, 26), Size = UDim2.new(0, attWidth, 0, attHeight),
+                    Position = UDim2.new(0, (col * invLayout.MainSpacing) + (j-1)*(isMobile and 10.5 or 13.5), 0, invLayout.MainIconSize + 3), Visible = false
                 })
                 Create("UICorner", { Parent = att, CornerRadius = UDim.new(0, 3) })
                 local attIcon = Create("ImageLabel", { Parent = att, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Image = EMPTY_ICON })
@@ -811,7 +841,7 @@ TargetStatusLabel = Create("TextLabel", {
 
 local function GetInvTarget()
     local near = nil; local dist = math.huge
-    local mouse = LocalPlayer:GetMouse(); local mousePos = Vector2.new(mouse.X, mouse.Y)
+    local refPos = isMobile and (Camera.ViewportSize / 2) or (Vector2.new(LocalPlayer:GetMouse().X, LocalPlayer:GetMouse().Y))
 
     local function check(model)
         if not model then return end
@@ -819,8 +849,8 @@ local function GetInvTarget()
         if hrp then
             local p2d, onScreen = Camera:WorldToViewportPoint(hrp.Position)
             if onScreen then
-                local d = (Vector2.new(p2d.X, p2d.Y) - mousePos).Magnitude
-                if d < dist and d < 1500 then
+                local d = (Vector2.new(p2d.X, p2d.Y) - refPos).Magnitude
+                if d < dist and d < (isMobile and 150 or 1500) then
                     dist = d; near = model
                 end
             end
@@ -1414,7 +1444,12 @@ AddConnection(RunService.RenderStepped:Connect(function()
                 InvFrame.Visible = true
                 InvValueTxt.Visible = InvCheckSettings.Features["Show Inventory Value"]
                 FullGrid.Visible = showFull
-                InvFrame.Size = UDim2.new(0, 480, 0, showFull and 580 or 210)
+                
+                if isMobile then
+                    InvFrame.Size = showFull and UDim2.new(0, 480, 0, 420) or UDim2.new(0, 480, 0, 160)
+                else
+                    InvFrame.Size = showFull and UDim2.new(0, 480, 0, 580) or UDim2.new(0, 480, 0, 210)
+                end
                 UpdateInvIcons(target)
             else
                 InvFrame.Visible = false
